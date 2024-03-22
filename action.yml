@@ -1,0 +1,45 @@
+name: SFDX Package Installation
+description: Composite action for installing packages on a specific Salesforce target org.
+
+inputs:
+  packages:
+    description: Specify Salesforce packages to be installed by providing a list of aliases or IDs, e.g. "['04t6S000001UjutQAC','04t3y000000X0OaAAK']".
+    required: true
+  target-org:
+    description: Username or alias of the target org. Not required if default org is already set.
+    required: false
+  api-version:
+    description: Override the api version used for api requests made by this action, for example '59.0'.
+    required: false
+  wait:
+    description: Number of minutes to wait for installation status.
+    required: false
+    default: '0'
+  publish-wait:
+    description: Maximum number of minutes to wait for the Subscriber Package Version ID to become available in the target org before canceling the install request.
+    required: false
+    default: '0'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Packages
+      shell: bash
+      run: |
+        args=()
+
+        if [[ -n "${{ inputs.target-org }}" ]]; then
+          args+=(--target-org "${{ inputs.target-org }}")
+        fi
+
+        if [[ -n "${{ inputs.api-version }}" ]]; then
+          args+=(--api-version "${{ inputs.api-version }}")
+        fi
+
+        echo "Installing SF packages: ${{ join( fromJSON(inputs.packages), ', ') }}"
+
+        for i in ${{ join( fromJSON(inputs.packages), ' ') }}
+        do
+          echo "Installing package $i..."
+          sf package install --wait ${{ inputs.wait }} --publish-wait ${{ inputs.publish-wait }} --package $i --no-prompt "${args[@]}"
+        done
