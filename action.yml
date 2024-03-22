@@ -1,6 +1,10 @@
 name: SFDX Package Installation
 description: Composite action for installing packages on a specific Salesforce target org.
 
+branding:
+  icon: package
+  color: blue
+
 inputs:
   packages:
     description: Specify Salesforce packages to be installed by providing a list of aliases or IDs, e.g. "['04t6S000001UjutQAC','04t3y000000X0OaAAK']".
