@@ -30,20 +30,34 @@ runs:
     - name: Install Packages
       shell: bash
       run: |
-        args=()
+        params=()
 
         if [[ -n "${{ inputs.target-org }}" ]]; then
-          args+=(--target-org "${{ inputs.target-org }}")
+          params+=(--target-org "${{ inputs.target-org }}")
         fi
 
         if [[ -n "${{ inputs.api-version }}" ]]; then
-          args+=(--api-version "${{ inputs.api-version }}")
+          params+=(--api-version "${{ inputs.api-version }}")
         fi
 
         echo "Installing SF packages: ${{ join( fromJSON(inputs.packages), ', ') }}"
 
         for i in ${{ join( fromJSON(inputs.packages), ' ') }}
         do
-          echo "Installing package $i..."
-          sf package install --wait ${{ inputs.wait }} --publish-wait ${{ inputs.publish-wait }} --package $i --no-prompt "${args[@]}"
+          pkg=""
+          k=""
+          args=("${params[@]}")
+
+          if [[ $i == *"_"* ]]; then
+            echo "Installation key for key-protected package found..."
+            pkg=$(echo ${i} | cut -d '_' -f 1)
+            k=$(echo ${i} | cut -d '_' -f 2)
+            echo "Key: $k"
+            args+=(--installation-key $k)
+          else
+            pkg=$i
+          fi
+
+          echo "Installing package $pkg..."
+          sf package install --wait ${{ inputs.wait }} --publish-wait ${{ inputs.publish-wait }} --package $pkg --no-prompt "${args[@]}"
         done

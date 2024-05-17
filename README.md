@@ -37,6 +37,8 @@ jobs:
           publish-wait: 20
 ```
 
+If the packages you want to install are key-protected, you can simply append the required installation key for each package with an underscore, e.g. '04t6S000001UjutQAC_INSTALLATIONKEY'.
+
 The following actions were also used in the example workflow to create the prerequisites for the package installation:
 
 - [Get Node Version](https://github.com/svierk/get-node-version) | Pulls Node.js version to be used from the _package.json_ of the project
