@@ -7,7 +7,9 @@ branding:
 
 inputs:
   packages:
-    description: Specify Salesforce packages to be installed by providing a list of aliases or IDs, e.g. "['04t6S000001UjutQAC','04t3y000000X0OaAAK']".
+    description: >
+      Salesforce packages to be installed, as a comma-separated or multi-line list of aliases or IDs, e.g. "04t6S000001UjutQAC,04t3y000000X0OaAAK".
+      Append "_<key>" to a package for key-protected installs. The JSON array notation "['04t6S000001UjutQAC','04t3y000000X0OaAAK']" is still supported.
     required: true
   target-org:
     description: Username or alias of the target org. Not required if default org is already set.
@@ -34,7 +36,7 @@ runs:
     - name: Install Packages
       shell: bash
       env:
-        PACKAGES: ${{ join(fromJSON(inputs.packages), ' ') }}
+        PACKAGES: ${{ inputs.packages }}
         TARGET_ORG: ${{ inputs.target-org }}
         API_VERSION: ${{ inputs.api-version }}
         WAIT: ${{ inputs.wait }}
@@ -53,16 +55,54 @@ runs:
           params+=(--api-version "$API_VERSION")
         fi
 
+        trim() {
+          local s="$1"
+          s="${s#"${s%%[![:space:]]*}"}"
+          s="${s%"${s##*[![:space:]]}"}"
+          printf '%s' "$s"
+        }
+
+        # Splits a comma- or newline-separated input into the global SPLIT array
+        # and trims the surrounding whitespace, so that all notations work:
+        #   packages: '04t6S000001UjutQAC,04t3y000000X0OaAAK'
+        #   packages: |
+        #     04t6S000001UjutQAC
+        #     04t3y000000X0OaAAK
+        #   packages: "['04t6S000001UjutQAC','04t3y000000X0OaAAK']"
+        # The JSON array notation is kept for backwards compatibility: without
+        # its brackets and quotes it is nothing but a comma-separated list.
+        split_list() {
+          SPLIT=()
+          local raw item
+          raw="$(trim "$1")"
+          if [[ "$raw" == \[*\] ]]; then
+            raw="${raw#\[}"
+            raw="${raw%\]}"
+          fi
+          raw="${raw//,/$'\n'}"
+          while IFS= read -r item; do
+            item="$(trim "$item")"
+            if [[ "$item" == \"*\" || "$item" == \'*\' ]]; then
+              item="$(trim "${item:1:${#item}-2}")"
+            fi
+            if [[ -n "$item" ]]; then
+              SPLIT+=("$item")
+            fi
+          done <<< "$raw"
+        }
+
+        split_list "$PACKAGES"
+
         # Split the list up front so that no log output ever contains an
         # installation key. A trailing "_<key>" marks a key-protected package,
         # e.g. "04t..._myKey".
         pkgs=()
         keys=()
-        for i in $PACKAGES; do
+        for i in ${SPLIT[@]+"${SPLIT[@]}"}; do
           if [[ "$i" == *"_"* ]]; then
             k="${i#*_}"
             echo "::add-mask::$k" # mask the key for the rest of the job, also if it was not passed as a secret
-            pkgs+=("${i%%_*}")
+            pkgs+=("$(trim "${i%%_*}")")
             keys+=("$k")
           else
             pkgs+=("$i")
@@ -70,7 +110,22 @@ runs:
           fi
         done
 
-        echo "Installing SF packages: ${pkgs[*]-}"
+        # Package IDs and aliases never contain quotes or brackets - leftovers
+        # point to a malformed input notation. Only the package part is checked
+        # and printed, so the error message can never expose an installation key.
+        for pkg in ${pkgs[@]+"${pkgs[@]}"}; do
+          if [[ -z "$pkg" || "$pkg" == *[\"\'\[\]]* ]]; then
+            echo "::error title=Invalid packages input::Could not parse package \"$pkg\". Use a comma-separated string, a multi-line block or a JSON array, e.g. '04t6S000001UjutQAC,04t3y000000X0OaAAK'."
+            exit 1
+          fi
+        done
+
+        if [[ ${#pkgs[@]} -eq 0 ]]; then
+          echo "::error title=Invalid packages input::No packages specified. Provide at least one package alias or ID."
+          exit 1
+        fi
+
+        echo "Installing SF packages: ${pkgs[*]}"
 
         # Arrays are expanded with the "${arr[@]+...}" guard: with "set -u" the
         # plain expansion of an empty array aborts on Bash 3.2, which is what

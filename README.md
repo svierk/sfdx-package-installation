@@ -20,39 +20,59 @@ jobs:
           persist-credentials: false # the GITHUB_TOKEN is not needed after the checkout - don't leave it in .git/config
 
       - name: Select Node Version
-        uses: svierk/get-node-version@v1.5.1
+        uses: svierk/get-node-version@v1.5.2
 
       - name: Install Dependencies
         run: npm ci
 
       - name: Install SF CLI
-        uses: svierk/sfdx-cli-setup@v1.1.3
+        uses: svierk/sfdx-cli-setup@v1.2.0
 
       - name: Salesforce Org Login
-        uses: svierk/sfdx-login@v1.4.2
+        uses: svierk/sfdx-login@v1.4.3
         with:
           sfdx-url: ${{ secrets.SFDX_AUTH_URL }}
 
       - name: Package Installation
-        uses: svierk/sfdx-package-installation@v1.2.1
+        uses: svierk/sfdx-package-installation@v1.3.0
         with:
-          packages: "['04t6S000001UjutQAC','04t3y000000X0OaAAK']"
+          packages: '04t6S000001UjutQAC,04t3y000000X0OaAAK'
           wait: 30
           publish-wait: 20
 ```
 
 Every action above is pinned to an exact release tag instead of a moving reference like `@main`, so a workflow run is reproducible and an update is always an explicit, reviewable change.
 
+### List input (comma-separated or multi-line)
+
+The `packages` input accepts a comma-separated string as well as a multi-line block, and the two notations can be mixed freely within one step. A comma-separated string keeps short lists on a single line, a block stays readable once a list grows:
+
+```yaml
+- name: Package Installation
+  uses: svierk/sfdx-package-installation@v1.3.0
+  with:
+    packages: | # multi-line block
+      04t6S000001UjutQAC
+      04t3y000000X0OaAAK
+      MyPackage@1.2.0-1
+```
+
+Surrounding whitespace and blank lines are ignored, so `'04t6S000001UjutQAC, 04t3y000000X0OaAAK'` is read exactly like the tightly packed `'04t6S000001UjutQAC,04t3y000000X0OaAAK'`. Packages are installed one after another in the given order, so list dependencies before the packages that need them.
+
+The JSON array notation used up to v1.2.x, e.g. `"['04t6S000001UjutQAC','04t3y000000X0OaAAK']"`, is still supported, so existing workflows keep working unchanged. A malformed input, such as an unclosed array, fails the step with an explicit error message instead of installing something unintended.
+
 If the packages you want to install are key-protected, you can simply append the required installation key for each package with an underscore, e.g. `04t6S000001UjutQAC_INSTALLATIONKEY`. Since an installation key is a credential, keep it in a [GitHub Actions secret](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions) rather than in the workflow file:
 
 ```yaml
 - name: Package Installation
-  uses: svierk/sfdx-package-installation@v1.2.1
+  uses: svierk/sfdx-package-installation@v1.3.0
   with:
-    packages: "['04t6S000001UjutQAC_${{ secrets.SFDX_PACKAGE_KEY }}']"
+    packages: |
+      04t6S000001UjutQAC_${{ secrets.SFDX_PACKAGE_KEY }}
+      04t3y000000X0OaAAK
 ```
 
-The action masks every installation key in the job log and never prints it, so keys stay hidden even if they are passed as a literal value.
+The action masks every installation key in the job log and never prints it, so keys stay hidden even if they are passed as a literal value. Since commas and line breaks separate the list entries, an installation key must not contain either of them.
 
 The following actions were also used in the example workflow to create the prerequisites for the package installation:
 
@@ -66,7 +86,7 @@ Of course, the package installation action can be used flexibly and the respecti
 
 | Name           | Required | Default | Description                                                                                                  |
 | -------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `packages`     | yes      |         | Packages to install as a JSON array of aliases or IDs, e.g. `"['04t...','04t...']"`. Append `_<key>` to a package ID for key-protected installs. |
+| `packages`     | yes      |         | Packages to install as a comma-separated or multi-line list of aliases or IDs, e.g. `04t...,04t...`. Append `_<key>` to a package for key-protected installs. The JSON array notation `"['04t...','04t...']"` is still supported. |
 | `target-org`   | no       |         | Username or alias of the target org. Not required if the default org is set.                               |
 | `api-version`  | no       |         | Override the api version used for api requests, e.g. `59.0`.                                               |
 | `wait`         | no       | `0`     | Number of minutes to wait for installation status.                                                         |
