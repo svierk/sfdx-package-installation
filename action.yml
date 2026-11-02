@@ -15,7 +15,7 @@ inputs:
     description: Username or alias of the target org. Not required if default org is already set.
     required: false
   api-version:
-    description: Override the api version used for api requests made by this action, for example '59.0'.
+    description: Override the api version used for api requests made by this action, for example '68.0'.
     required: false
   wait:
     description: Number of minutes to wait for installation status.
