@@ -25,6 +25,10 @@ inputs:
     description: Maximum number of minutes to wait for the Subscriber Package Version ID to become available in the target org before canceling the install request.
     required: false
     default: '0'
+  install-delay:
+    description: Number of seconds to pause between two package installations, e.g. to let metadata locks of the previous package clear. Requires a "wait" long enough for each installation to finish.
+    required: false
+    default: '0'
   step-summary:
     description: Write a result section to the GitHub Actions job summary. Set to false to avoid collisions with a custom workflow summary.
     required: false
@@ -41,6 +45,7 @@ runs:
         API_VERSION: ${{ inputs.api-version }}
         WAIT: ${{ inputs.wait }}
         PUBLISH_WAIT: ${{ inputs.publish-wait }}
+        INSTALL_DELAY: ${{ inputs.install-delay }}
         STEP_SUMMARY: ${{ inputs.step-summary }}
       run: |
         set -euo pipefail
@@ -125,6 +130,16 @@ runs:
           exit 1
         fi
 
+        # Checked before the first installation, so that a typo fails the step
+        # right away instead of after the first package. The "10#" prefix keeps
+        # a leading zero from being read as an octal number.
+        INSTALL_DELAY="$(trim "$INSTALL_DELAY")"
+        if [[ ! "${INSTALL_DELAY:-0}" =~ ^[0-9]+$ ]]; then
+          echo "::error title=Invalid install-delay input::Could not parse \"$INSTALL_DELAY\". Provide a whole number of seconds, e.g. '60'."
+          exit 1
+        fi
+        delay=$((10#${INSTALL_DELAY:-0}))
+
         echo "Installing SF packages: ${pkgs[*]}"
 
         # Arrays are expanded with the "${arr[@]+...}" guard: with "set -u" the
@@ -134,6 +149,11 @@ runs:
         for idx in "${!pkgs[@]}"; do
           pkg="${pkgs[$idx]}"
           args=(${params[@]+"${params[@]}"})
+
+          if [[ "$idx" -gt 0 && "$delay" -gt 0 ]]; then
+            echo "Waiting $delay second(s) before the next installation..."
+            sleep "$delay"
+          fi
 
           if [[ -n "${keys[$idx]}" ]]; then
             echo "Installation key for key-protected package found..."
