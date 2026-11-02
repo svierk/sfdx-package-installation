@@ -34,7 +34,7 @@ jobs:
           sfdx-url: ${{ secrets.SFDX_AUTH_URL }}
 
       - name: Package Installation
-        uses: svierk/sfdx-package-installation@v1.3.0
+        uses: svierk/sfdx-package-installation@v1.4.0
         with:
           packages: '04t6S000001UjutQAC,04t3y000000X0OaAAK'
           wait: 30
@@ -49,7 +49,7 @@ The `packages` input accepts a comma-separated string as well as a multi-line bl
 
 ```yaml
 - name: Package Installation
-  uses: svierk/sfdx-package-installation@v1.3.0
+  uses: svierk/sfdx-package-installation@v1.4.0
   with:
     packages: | # multi-line block
       04t6S000001UjutQAC
@@ -65,7 +65,7 @@ If the packages you want to install are key-protected, you can simply append the
 
 ```yaml
 - name: Package Installation
-  uses: svierk/sfdx-package-installation@v1.3.0
+  uses: svierk/sfdx-package-installation@v1.4.0
   with:
     packages: |
       04t6S000001UjutQAC_${{ secrets.SFDX_PACKAGE_KEY }}
@@ -73,6 +73,21 @@ If the packages you want to install are key-protected, you can simply append the
 ```
 
 The action masks every installation key in the job log and never prints it, so keys stay hidden even if they are passed as a literal value. Since commas and line breaks separate the list entries, an installation key must not contain either of them.
+
+### Pause between installations
+
+Right after an installation, Salesforce can still hold locks on the metadata of that package, and the next installation then fails with an error like `Record Currently Unavailable, Details: The record you are attempting to edit, or one of its related records, is currently being modified by another user`. If you run into this, for example while provisioning a scratch org, the `install-delay` input adds a pause between two installations:
+
+```yaml
+- name: Package Installation
+  uses: svierk/sfdx-package-installation@v1.4.0
+  with:
+    packages: '04t6S000001UjutQAC,04t3y000000X0OaAAK'
+    wait: 30
+    install-delay: 60 # seconds
+```
+
+There is no pause before the first or after the last package, so a single package never takes longer. The pause only helps if each installation has finished when it starts, so set `wait` high enough: with the default `wait` of `0`, the CLI returns while the installation is still running.
 
 The following actions were also used in the example workflow to create the prerequisites for the package installation:
 
@@ -91,6 +106,7 @@ Of course, the package installation action can be used flexibly and the respecti
 | `api-version`  | no       |         | Override the api version used for api requests, e.g. `68.0`.                                               |
 | `wait`         | no       | `0`     | Number of minutes to wait for installation status.                                                         |
 | `publish-wait` | no       | `0`     | Maximum minutes to wait for the Subscriber Package Version ID to become available before canceling.        |
+| `install-delay` | no      | `0`     | Number of seconds to pause between two package installations, e.g. to let metadata locks of the previous package clear. |
 | `step-summary` | no       | `true`  | Write a result section to the GitHub Actions [job summary](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-job-summary). Set to `false` to avoid collisions with a custom workflow summary. |
 
 ## Releases
